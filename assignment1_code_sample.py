@@ -1,36 +1,56 @@
 import os
 import pymysql
+import subprocess
 from urllib.request import urlopen
 
 db_config = {
-    'host': 'mydatabase.com',
-    'user': 'admin',
-    'password': 'secret123'
+    "host": os.getenv("DB_HOST"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
+
 def get_user_input():
-    user_input = input('Enter your name: ')
+    user_input = input("Enter your name: ").strip()
+    if not user_input.isalpha():
+        raise ValueError("Invalid name: must contain only letters.")
     return user_input
 
+
 def send_email(to, subject, body):
-    os.system(f'echo {body} | mail -s "{subject}" {to}')
+    try:
+        subprocess.run(["mail", "-s", subject, to], input=body.encode(), check=True)
+    except Exception as e:
+        print(f"Error sending email: {e}")
+
 
 def get_data():
-    url = 'http://insecure-api.com/get-data'
-    data = urlopen(url).read().decode()
-    return data
+    url = "https://secure-api.com/get-data"
+    try:
+        response = urlopen(url)
+        return response.read().decode()
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return None
+
 
 def save_to_db(data):
-    query = f"INSERT INTO mytable (column1, column2) VALUES ('{data}', 'Another Value')"
-    connection = pymysql.connect(**db_config)
-    cursor = connection.cursor()
-    cursor.execute(query)
-    connection.commit()
-    cursor.close()
-    connection.close()
+    query = "INSERT INTO mytable (column1, column2) VALUES (%s, %s)"
+    try:
+        with pymysql.connect(**db_config) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query, (data, "Another Value"))
+            connection.commit()
+    except Exception as e:
+        print(f"Database error: {e}")
 
-if __name__ == '__main__':
-    user_input = get_user_input()
-    data = get_data()
-    save_to_db(data)
-    send_email('admin@example.com', 'User Input', user_input)
+
+if __name__ == "__main__":
+    try:
+        user_input = get_user_input()
+        data = get_data()
+        if data:
+            save_to_db(data)
+        send_email("admin@example.com", "User Input", user_input)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
